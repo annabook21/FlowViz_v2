@@ -1,0 +1,1740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>FlowViz - AWS Network Diagram Generator</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Use CDN for vis-network to avoid local installation issues -->
+    <script type="text/javascript" src="https://unpkg.com/vis-network@9.1.6/dist/vis-network.min.js"></script>
+</head>
+<body>
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-bar-text">FlowViz: AWS Network Diagram Generator</div>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="manual-input">Manual Input</div>
+            <div class="tab" data-tab="import-json">Import JSON</div>
+            <div class="tab" data-tab="visualization">Visualization</div>
+        </div>
+        
+        <!-- Manual Input Tab -->
+        <div id="manual-input" class="tab-content active">
+            <form id="networkInputForm">
+                <div id="resourceFields"></div>
+                <button type="button" id="addResourceBtn" class="btn">Add Another Resource</button>
+                <button type="submit" class="btn">Generate Diagram</button>
+                <button id="downloadButton" class="btn">Download Traffic Details</button>
+            </form>
+        </div>
+        
+        <!-- Import JSON Tab -->
+        <div id="import-json" class="tab-content">
+            <div class="form-group">
+                <button id="openFileBtn" class="btn">Open JSON File</button>
+                <div id="fileInfo" style="margin-top: 10px;"></div>
+            </div>
+            <div class="form-group">
+                <h3>JSON Preview</h3>
+                <div id="jsonPreview"></div>
+            </div>
+            <button id="parseJsonBtn" class="btn" disabled>Generate Network Diagram</button>
+        </div>
+        
+        <!-- Visualization Tab -->
+        <div id="visualization" class="tab-content">
+            <div id="networkDiagram" style="width: 100%; height: 600px; border: 1px solid #ccc; position: relative;"></div>
+            
+            <!-- Path Analysis Tool -->
+            <div style="margin-top: 15px; padding: 10px; border: 1px solid #ddd; background-color: #f5f5f5; border-radius: 5px;">
+                <h3 style="margin-top: 0;">Path Analysis Simulator</h3>
+                <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <label for="sourceSelector" style="display: block; margin-bottom: 5px; font-weight: bold;">Source:</label>
+                        <select id="sourceSelector" class="input-control" style="width: 100%;">
+                            <option value="">Select a source</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <label for="destinationType" style="display: block; margin-bottom: 5px; font-weight: bold;">Destination Type:</label>
+                        <select id="destinationType" class="input-control" style="width: 100%;">
+                            <option value="internal">Within VPC</option>
+                            <option value="external">External (Internet)</option>
+                            <option value="vpc-endpoint">VPC Endpoint</option>
+                            <option value="vpc-peering">VPC Peering Connection</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <label for="destinationSelector" style="display: block; margin-bottom: 5px; font-weight: bold;">Destination:</label>
+                        <select id="destinationSelector" class="input-control" style="width: 100%;">
+                            <option value="">Select destination type first</option>
+                        </select>
+                    </div>
+                    <div id="externalDestContainer" style="flex: 1; min-width: 200px; display: none;">
+                        <label for="externalDestination" style="display: block; margin-bottom: 5px; font-weight: bold;">External IP/Domain:</label>
+                        <input type="text" id="externalDestination" class="input-control" style="width: 100%;" placeholder="8.8.8.8 or example.com">
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="portSelector" style="display: block; margin-bottom: 5px; font-weight: bold;">Port:</label>
+                        <input type="number" id="portSelector" class="input-control" style="width: 100%;" value="443" min="1" max="65535">
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="protocolSelector" style="display: block; margin-bottom: 5px; font-weight: bold;">Protocol:</label>
+                        <select id="protocolSelector" class="input-control" style="width: 100%;">
+                            <option value="TCP">TCP</option>
+                            <option value="UDP">UDP</option>
+                            <option value="ICMP">ICMP</option>
+                        </select>
+                    </div>
+                    <div style="align-self: flex-end;">
+                        <button id="simulatePathBtn" class="btn" style="margin-bottom: 0;">Simulate Path</button>
+                    </div>
+                </div>
+                <div id="pathAnalysisResult" style="margin-top: 10px; display: none; padding: 10px; border: 1px solid #ccc; background-color: white;">
+                </div>
+                <div style="margin-top: 10px; font-size: 12px; color: #666; font-style: italic;">
+                    <strong>Disclaimer:</strong> Path analysis is based solely on AWS configuration (Security Groups, NACLs, Route Tables) captured in the imported data. This analysis cannot account for customer firewalls, proxies, or other network conditions outside of AWS that may restrict traffic. Results should be considered theoretical until validated in the actual environment.
+                </div>
+            </div>
+            
+            <div style="display: flex; margin-top: 10px;">
+                <div class="resource-details" style="flex: 1; padding-right: 10px;">
+                    <h3>Selected Resource Details</h3>
+                    <div id="selectedResourceDetails" style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; padding: 10px;">Click on a resource in the diagram to see details</div>
+                </div>
+                <div style="flex: 2;">
+                    <h3>Traffic Flows</h3>
+                    <div id="trafficFlows" style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; padding: 10px;">No traffic flows to display</div>
+                </div>
+            </div>
+            <div style="margin-top: 10px; text-align: center;">
+                <button id="resetViewBtn" class="btn">Reset View</button>
+                <button id="togglePhysicsBtn" class="btn">Toggle Physics</button>
+                <button id="exportDiagramBtn" class="btn">Export Diagram</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="creator-info">
+        <p>Created by Anna Booker © 2024. All rights reserved.</p>
+        <p>GitHub: <a href="https://github.com/annabook21?tab=repositories" style="color: #0000ff;">annabook21</a></p>
+        <p>LinkedIn: <a href="https://linkedin.com/in/annadbooker" style="color: #0000ff;">annadbooker</a></p>
+    </div>
+
+    <script>
+        let resourceIndex = 1; // Initialize resource index
+        let jsonData = null; // Store parsed JSON data
+        let network = null; // Store network visualization
+
+        // Tab switching functionality
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Remove active class from all tabs and tab content
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Add active class to clicked tab and corresponding content
+                tab.classList.add('active');
+                const tabId = tab.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+
+        function toggleVPCDetails(resourceGroup, association) {
+            const vpcDetails = resourceGroup.querySelector('.vpc-details');
+            const outsideVpcDetails = resourceGroup.querySelector('.outside-vpc-details');
+            vpcDetails.style.display = association === 'inside' ? 'block' : 'none';
+            outsideVpcDetails.style.display = association === 'outside' ? 'block' : 'none';
+        }
+
+        function toggleOtherResourceType(resourceTypeSelect) {
+            const formGroup = resourceTypeSelect.closest('.form-group');
+            const otherTypeInput = formGroup.querySelector('.other-resource-type');
+            otherTypeInput.style.display = resourceTypeSelect.value === 'other' ? 'block' : 'none';
+        }
+
+        function addResource() {
+            const container = document.getElementById('resourceFields');
+            const resourceGroup = document.createElement('div');
+            resourceGroup.className = 'resource-group';
+            resourceGroup.setAttribute('data-index', resourceIndex++);
+            resourceGroup.innerHTML = `
+                <div class="form-group">
+                    <label>Resource:</label>
+                    <select name="resourceType[]" class="input-control" onchange="toggleOtherResourceType(this)">
+                        <option value="">Select a Resource Type</option>
+                        <option value="EC2">EC2 Instance (i-)</option>
+                        <option value="VPC Endpoint">VPC Endpoint (vpce-)</option>
+                        <option value="Internet Gateway">Internet Gateway (igw-)</option>
+                        <option value="NAT Gateway">NAT Gateway (ngw-)</option>
+                        <option value="Transit Gateway">Transit Gateway (tgw-)</option>
+                        <option value="other">Other (Specify Below)</option>
+                    </select>
+                    <input type="text" name="otherResourceType[]" class="input-control other-resource-type" placeholder="Other Resource Type" style="display: none;">
+                    <input type="text" name="resourceId[]" class="input-control" placeholder="Resource ID (include prefix)">
+                    <select name="resourceVPCAssociation[]" class="input-control vpc-association" onchange="toggleVPCDetails(this.closest('.resource-group'), this.value)">
+                        <option value="">Select VPC Association</option>
+                        <option value="inside">Inside VPC</option>
+                        <option value="outside">Outside VPC</option>
+                    </select>
+                </div>
+                <div class="vpc-details" style="display: none;">
+                    <input type="text" name="VpcId[]" class="input-control" placeholder="VPC ID">
+                    <input type="text" name="subnetId[]" class="input-control" placeholder="Subnet ID">
+                    <input type="text" name="routeTableId[]" class="input-control" placeholder="Route Table ID">
+                </div>
+                <div class="outside-vpc-details" style="display: none;">
+                    <input type="text" name="ipAddress[]" class="input-control" placeholder="IP Address (if applicable)">
+                    <input type="text" name="outsideVpcId[]" class="input-control" placeholder="VPC ID (if applicable)">
+                    <input type="text" name="region[]" class="input-control" placeholder="Region (if applicable)">
+                    <input type="text" name="subnetId[]" class="input-control" placeholder="Subnet ID (if applicable)">
+                    <input type="text" name="routeTableId[]" class="input-control" placeholder="Route Table ID (if applicable)">
+                </div>
+            `;
+            container.appendChild(resourceGroup);
+        }
+
+        // Initialize the manual input functionality
+        document.getElementById('addResourceBtn').addEventListener('click', addResource);
+        
+        document.getElementById('downloadButton').addEventListener('click', function(e) {
+            e.preventDefault();
+            const resources = [];
+            document.querySelectorAll('.resource-group').forEach((group) => {
+                const index = group.getAttribute('data-index');
+                const typeSelect = group.querySelector('select[name="resourceType[]"]');
+                const type = typeSelect.value === 'other' ? group.querySelector('input[name="otherResourceType[]"]').value : typeSelect.value;
+                const id = group.querySelector('input[name="resourceId[]"]').value;
+                const vpcId = group.querySelector('input[name="VpcId[]"]') ? group.querySelector('input[name="VpcId[]"]').value : '';
+                const subnetId = group.querySelector('input[name="subnetId[]"]') ? group.querySelector('input[name="subnetId[]"]').value : '';
+                const routeTableId = group.querySelector('input[name="routeTableId[]"]') ? group.querySelector('input[name="routeTableId[]"]').value : '';
+                const ipAddress = group.querySelector('input[name="ipAddress[]"]') ? group.querySelector('input[name="ipAddress[]"]').value : '';
+                const outsideVpcId = group.querySelector('input[name="outsideVpcId[]"]') ? group.querySelector('input[name="outsideVpcId[]"]').value : '';
+                const region = group.querySelector('input[name="region[]"]') ? group.querySelector('input[name="region[]"]').value : '';
+                resources.push({
+                    id: index,
+                    label: `${type}\n${id}`,
+                    title: `Type: ${type}\nID: ${id}\nVPC ID: ${vpcId}\nSubnet ID: ${subnetId}\nRoute Table ID: ${routeTableId}\nIP Address: ${ipAddress}\nOutside VPC ID: ${outsideVpcId}\nRegion: ${region}`,
+                    shape: 'box'
+                });
+            });
+            generateOutputFile(resources);
+        });
+
+        document.getElementById('networkInputForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const resources = [];
+
+            document.querySelectorAll('.resource-group').forEach((group) => {
+                const index = group.getAttribute('data-index');
+                const typeSelect = group.querySelector('select[name="resourceType[]"]');
+                const type = typeSelect.value === 'other' ? group.querySelector('input[name="otherResourceType[]"]').value : typeSelect.value;
+                const id = group.querySelector('input[name="resourceId[]"]').value;
+                const vpcId = group.querySelector('input[name="VpcId[]"]') ? group.querySelector('input[name="VpcId[]"]').value : '';
+                const subnetId = group.querySelector('input[name="subnetId[]"]') ? group.querySelector('input[name="subnetId[]"]').value : '';
+                const routeTableId = group.querySelector('input[name="routeTableId[]"]') ? group.querySelector('input[name="routeTableId[]"]').value : '';
+                const ipAddress = group.querySelector('input[name="ipAddress[]"]') ? group.querySelector('input[name="ipAddress[]"]').value : '';
+                const outsideVpcId = group.querySelector('input[name="outsideVpcId[]"]') ? group.querySelector('input[name="outsideVpcId[]"]').value : '';
+                const region = group.querySelector('input[name="region[]"]') ? group.querySelector('input[name="region[]"]').value : '';
+                resources.push({
+                    id: index,
+                    label: `${type}\n${id}`,
+                    title: `Type: ${type}\nID: ${id}\nVPC ID: ${vpcId}\nSubnet ID: ${subnetId}\nRoute Table ID: ${routeTableId}\nIP Address: ${ipAddress}\nOutside VPC ID: ${outsideVpcId}\nRegion: ${region}`,
+                    shape: 'box'
+                });
+            });
+
+            createNetworkDiagram(resources);
+            
+            // Switch to visualization tab
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector('.tab[data-tab="visualization"]').classList.add('active');
+            document.getElementById('visualization').classList.add('active');
+        });
+
+        function generateOutputFile(resources) {
+            let outputContent = "Flow of Traffic Details:\n\n";
+            resources.forEach((resource, index) => {
+                // Number each resource to represent it as a hop in the traffic flow
+                outputContent += `Hop ${index + 1}: ${resource.label}\n`;
+                
+                const titleLines = resource.title.split('\n');
+                for (const line of titleLines) {
+                    outputContent += `  ${line}\n`;
+                }
+
+                // Use arrows to indicate the direction of the traffic flow to the next resource
+                if (index < resources.length - 1) {
+                    outputContent += `  ↓\n`;
+                }
+            });
+
+            // Create a Blob with the text content
+            const blob = new Blob([outputContent], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            
+            // Create a temporary link and trigger download
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "TrafficFlowDetails.txt";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // JSON Import functionality
+        document.getElementById('openFileBtn').addEventListener('click', async () => {
+            try {
+                const result = await window.api.openFile();
+                
+                if (result.canceled) return;
+                
+                if (result.error) {
+                    document.getElementById('fileInfo').textContent = `Error: ${result.error}`;
+                    return;
+                }
+                
+                document.getElementById('fileInfo').textContent = `File: ${result.filePath}`;
+                document.getElementById('jsonPreview').textContent = result.content;
+                document.getElementById('parseJsonBtn').disabled = false;
+                
+                // Store the raw JSON content for parsing later
+                jsonData = result.content;
+            } catch (error) {
+                document.getElementById('fileInfo').textContent = `Error: ${error.message}`;
+            }
+        });
+
+        document.getElementById('parseJsonBtn').addEventListener('click', () => {
+            if (!jsonData) return;
+            
+            try {
+                // Parse the JSON directly without using window.api
+                const parsedData = JSON.parse(jsonData);
+                
+                // Initialize path analysis controls
+                initializePathAnalysisControls(parsedData);
+                
+                // Process the FlowViz data into nodes and edges
+                processFlowVizData(parsedData);
+                
+                // Switch to visualization tab
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.querySelector('.tab[data-tab="visualization"]').classList.add('active');
+                document.getElementById('visualization').classList.add('active');
+            } catch (error) {
+                document.getElementById('fileInfo').textContent = `Error processing data: ${error.message}`;
+            }
+        });
+
+        function processFlowVizData(data) {
+            // Create nodes and edges from the FlowViz JSON data
+            const nodes = [];
+            const edges = [];
+            
+            // Process VPC as main container node
+            const vpc = data.network_components.vpc;
+            nodes.push({
+                id: vpc.id,
+                label: `VPC\n${vpc.id}`,
+                title: `VPC: ${vpc.name || vpc.id}\nCIDR: ${vpc.cidr_block}`,
+                shape: 'box',
+                group: 'vpc'
+            });
+            
+            // Process subnets
+            data.network_components.subnets.forEach(subnet => {
+                nodes.push({
+                    id: subnet.id,
+                    label: `Subnet\n${subnet.name || subnet.id}`,
+                    title: `Subnet: ${subnet.name || subnet.id}\nCIDR: ${subnet.cidr_block}\nAZ: ${subnet.availability_zone}\nPublic: ${subnet.public ? 'Yes' : 'No'}`,
+                    shape: 'box',
+                    group: 'subnet'
+                });
+                
+                // Connect subnet to VPC
+                edges.push({
+                    from: vpc.id,
+                    to: subnet.id,
+                    arrows: 'to',
+                    dashes: true,
+                    title: 'Contains',
+                    color: {color: '#9e9e9e', opacity: 0.6}
+                });
+            });
+            
+            // Process Internet Gateways
+            data.network_components.gateways.internet_gateways.forEach(igw => {
+                nodes.push({
+                    id: igw.id,
+                    label: `IGW\n${igw.name || igw.id}`,
+                    title: `Internet Gateway: ${igw.name || igw.id}`,
+                    shape: 'diamond',
+                    group: 'igw'
+                });
+                
+                // Connect IGW to VPC
+                edges.push({
+                    from: vpc.id,
+                    to: igw.id,
+                    arrows: 'to,from',
+                    title: 'Attached to',
+                    color: {color: '#2196F3', opacity: 0.8}
+                });
+            });
+            
+            // Process NAT Gateways
+            data.network_components.gateways.nat_gateways.forEach(nat => {
+                nodes.push({
+                    id: nat.id,
+                    label: `NAT\n${nat.name || nat.id}`,
+                    title: `NAT Gateway: ${nat.name || nat.id}\nState: ${nat.state}`,
+                    shape: 'diamond',
+                    group: 'nat'
+                });
+                
+                // Connect NAT to its subnet
+                if (nat.subnet_id) {
+                    edges.push({
+                        from: nat.subnet_id,
+                        to: nat.id,
+                        arrows: 'to',
+                        title: 'Resides in',
+                        color: {color: '#ff9800', opacity: 0.8}
+                    });
+                }
+            });
+            
+            // Process VPC Endpoints
+            if (data.network_components.gateways.vpc_endpoints) {
+                data.network_components.gateways.vpc_endpoints.forEach(endpoint => {
+                    // Extract name from service name for display
+                    const serviceParts = endpoint.service_name.split('.');
+                    const serviceName = serviceParts.length >= 3 ? serviceParts[serviceParts.length - 2] : endpoint.service_name;
+                    
+                    nodes.push({
+                        id: endpoint.id,
+                        label: `VPC Endpoint\n${serviceName}`,
+                        title: `VPC Endpoint: ${endpoint.id}\nService: ${endpoint.service_name}\nType: ${endpoint.type}`,
+                        shape: 'hexagon',
+                        group: 'endpoint'
+                    });
+                    
+                    // Connect endpoint to its subnets if endpoint has subnet_ids
+                    if (endpoint.subnet_ids && Array.isArray(endpoint.subnet_ids)) {
+                        endpoint.subnet_ids.forEach(subnetId => {
+                            edges.push({
+                                from: subnetId,
+                                to: endpoint.id,
+                                arrows: 'to',
+                                dashes: true,
+                                title: 'Connected to',
+                                color: {color: '#9c27b0', opacity: 0.8}
+                            });
+                        });
+                    }
+                    
+                    // For Gateway endpoints, connect to route tables if available
+                    if (endpoint.type === 'Gateway' && endpoint.route_table_ids && Array.isArray(endpoint.route_table_ids)) {
+                        endpoint.route_table_ids.forEach(routeTableId => {
+                            edges.push({
+                                from: routeTableId,
+                                to: endpoint.id,
+                                arrows: 'to',
+                                dashes: true,
+                                title: 'Route via',
+                                color: {color: '#9c27b0', opacity: 0.8}
+                            });
+                        });
+                    }
+                });
+            }
+            
+            // Process route tables and their associations
+            if (data.network_components.route_tables) {
+                data.network_components.route_tables.forEach(rt => {
+                    // Add route table node
+                    nodes.push({
+                        id: rt.id,
+                        label: `Route Table\n${rt.name || rt.id}`,
+                        title: `Route Table: ${rt.name || rt.id}`,
+                        shape: 'star',
+                        group: 'route'
+                    });
+                    
+                    // Connect route table to subnet
+                    rt.associations.forEach(assoc => {
+                        if (assoc.subnet_id) {
+                            edges.push({
+                                from: rt.id,
+                                to: assoc.subnet_id,
+                                arrows: 'to',
+                                dashes: true,
+                                title: assoc.main ? 'Main Association' : 'Association',
+                                color: {color: '#00bcd4', opacity: 0.8}
+                            });
+                        }
+                    });
+                    
+                    // Add routing rules as annotations in tooltip
+                    let routeInfo = '';
+                    rt.routes.forEach(route => {
+                        routeInfo += `Route: ${route.destination} → ${route.target_type} (${route.target_id})\n`;
+                    });
+                });
+            }
+            
+            // Process security groups
+            if (data.network_components.security && data.network_components.security.security_groups) {
+                data.network_components.security.security_groups.forEach(sg => {
+                    nodes.push({
+                        id: sg.id,
+                        label: `SG\n${sg.name || sg.id}`,
+                        title: `Security Group: ${sg.name || sg.id}\nDescription: ${sg.description}`,
+                        shape: 'dot',
+                        group: 'sg'
+                    });
+                });
+            }
+            
+            // Process traffic flows
+            if (data.traffic_flows && data.traffic_flows.length > 0) {
+                // Display traffic flows in the UI
+                displayTrafficFlows(data.traffic_flows);
+                
+                // Process source and destination as nodes if they don't already exist
+                data.traffic_flows.forEach((flow, index) => {
+                    const flowId = flow.id || `flow-${index + 1}`;
+                    
+                    // Add source if not already in nodes
+                    const sourceId = flow.source.id || `src-${flowId}`;
+                    const sourceExists = nodes.some(node => node.id === sourceId);
+                    if (!sourceExists) {
+                        nodes.push({
+                            id: sourceId,
+                            label: `${flow.source.type}\n${flow.source.name || flow.source.id || flow.source.ip}`,
+                            title: `Type: ${flow.source.type}\nID: ${flow.source.id || ''}\nIP: ${flow.source.ip || ''}`,
+                            group: 'source'
+                        });
+                    }
+                    
+                    // Add destination if not already in nodes
+                    const destId = flow.destination.id || flow.destination.ip || `dst-${flowId}`;
+                    const destExists = nodes.some(node => node.id === destId);
+                    if (!destExists) {
+                        nodes.push({
+                            id: destId,
+                            label: `${flow.destination.type}\n${flow.destination.hostname || flow.destination.name || flow.destination.ip || destId}`,
+                            title: `Type: ${flow.destination.type}\nIP: ${flow.destination.ip || ''}\nPort: ${flow.destination.port || ''}`,
+                            group: flow.destination.type === 'aws_service' ? 'service' : 'destination'
+                        });
+                    }
+                    
+                    // Create edges for each hop in the path
+                    if (flow.path && flow.path.length > 0) {
+                        let previousId = sourceId;
+                        flow.path.forEach((hop, hopIndex) => {
+                            const hopId = hop.component_id;
+                            
+                            // Add path component if not already in nodes
+                            const hopExists = nodes.some(node => node.id === hopId);
+                            if (!hopExists && hopId) {
+                                const groupType = getGroupForComponent(hop.component_type);
+                                nodes.push({
+                                    id: hopId,
+                                    label: `${hop.component_type}\n${hop.name || hop.component_id}`,
+                                    title: `Type: ${hop.component_type}\nID: ${hop.component_id}\nNotes: ${hop.notes || ''}`,
+                                    group: groupType
+                                });
+                            }
+                            
+                            // Add edge from previous hop to this one with sequence number
+                            if (previousId && hopId) {
+                                const edgeColor = hop.action === 'deny' ? '#f44336' : 
+                                                hop.action === 'allow' ? '#4caf50' : '#9e9e9e';
+                                const edgeStyle = getEdgeStyleForHop(hop, hopIndex, flow);
+                                
+                                edges.push({
+                                    from: previousId,
+                                    to: hopId,
+                                    arrows: 'to',
+                                    color: {
+                                        color: edgeColor,
+                                        opacity: 0.8
+                                    },
+                                    title: `Step ${hopIndex + 1}: ${hop.notes || ''}${hop.action ? ` (${hop.action.toUpperCase()})` : ''}`,
+                                    ...edgeStyle
+                                });
+                            }
+                            
+                            previousId = hopId;
+                        });
+                        
+                        // Add final edge to destination
+                        if (previousId && destId) {
+                            const finalEdgeColor = flow.status === 'allowed' ? '#4caf50' : 
+                                                flow.status === 'blocked' ? '#f44336' : '#ffc107';
+                            
+                            edges.push({
+                                from: previousId,
+                                to: destId,
+                                arrows: 'to',
+                                color: {
+                                    color: finalEdgeColor,
+                                    opacity: 0.8
+                                },
+                                width: 3,
+                                title: `${flow.protocol} traffic to port ${flow.port} (${flow.status.toUpperCase()})`,
+                                smooth: {
+                                    type: 'curvedCW',
+                                    roundness: 0.3
+                                }
+                            });
+                        }
+                    } else {
+                        // Direct connection if no path details
+                        if (sourceId && destId) {
+                            const directEdgeColor = flow.status === 'allowed' ? '#4caf50' : 
+                                                  flow.status === 'blocked' ? '#f44336' : '#ffc107';
+                            
+                            edges.push({
+                                from: sourceId,
+                                to: destId,
+                                arrows: 'to',
+                                color: {
+                                    color: directEdgeColor,
+                                    opacity: 0.8
+                                },
+                                width: 3,
+                                title: `${flow.protocol} traffic to port ${flow.port} (${flow.status.toUpperCase()})`
+                            });
+                        }
+                    }
+                });
+            }
+            
+            // Create the network visualization
+            createNetworkDiagram({nodes, edges});
+        }
+        
+        function getGroupForComponent(type) {
+            switch(type.toLowerCase()) {
+                case 'subnet': return 'subnet';
+                case 'internet_gateway': return 'igw';
+                case 'nat_gateway': return 'nat';
+                case 'vpc_endpoint': return 'endpoint';
+                case 'security_group': return 'sg';
+                case 'network_acl': return 'nacl';
+                case 'route_table': return 'route';
+                default: return 'default';
+            }
+        }
+        
+        function getEdgeStyleForHop(hop, index, flow) {
+            // Customize edge appearance based on component type and context
+            const baseStyle = { width: 2 };
+            
+            switch(hop.component_type.toLowerCase()) {
+                case 'security_group':
+                    return {
+                        ...baseStyle,
+                        dashes: [5, 5],
+                        width: 3
+                    };
+                case 'network_acl':
+                    return {
+                        ...baseStyle,
+                        dashes: [2, 2],
+                        width: 3
+                    };
+                case 'nat_gateway':
+                    return {
+                        ...baseStyle,
+                        width: 3,
+                        smooth: { type: 'curvedCW', roundness: 0.3 }
+                    };
+                case 'internet_gateway':
+                    return {
+                        ...baseStyle,
+                        width: 3,
+                        smooth: { type: 'curvedCW', roundness: 0.3 }
+                    };
+                default:
+                    return {
+                        ...baseStyle,
+                        smooth: { 
+                            enabled: true, 
+                            type: 'curvedCW', 
+                            roundness: 0.2 
+                        }
+                    };
+            }
+        }
+        
+        function displayTrafficFlows(flows) {
+            const container = document.getElementById('trafficFlows');
+            container.innerHTML = ''; // Clear current content
+            
+            if (!flows || flows.length === 0) {
+                container.textContent = 'No traffic flows to display';
+                return;
+            }
+            
+            flows.forEach(flow => {
+                const flowElement = document.createElement('div');
+                flowElement.className = 'traffic-flow';
+                flowElement.style.marginBottom = '15px';
+                flowElement.style.padding = '10px';
+                flowElement.style.backgroundColor = flow.status === 'allowed' ? '#e8f5e9' : 
+                                                   flow.status === 'blocked' ? '#ffebee' : '#fff9c4';
+                flowElement.style.borderRadius = '4px';
+                
+                const flowTitle = document.createElement('h4');
+                flowTitle.style.margin = '0 0 10px 0';
+                flowTitle.textContent = `${flow.source.name || flow.source.id} → ${flow.destination.hostname || flow.destination.ip}:${flow.port} (${flow.protocol})`;
+                
+                const flowStatus = document.createElement('div');
+                flowStatus.style.marginBottom = '5px';
+                flowStatus.style.fontWeight = 'bold';
+                flowStatus.textContent = `Status: ${flow.status.toUpperCase()}`;
+                
+                flowElement.appendChild(flowTitle);
+                flowElement.appendChild(flowStatus);
+                
+                // Add path details if available
+                if (flow.path && flow.path.length > 0) {
+                    const pathTitle = document.createElement('div');
+                    pathTitle.textContent = 'Path:';
+                    pathTitle.style.fontWeight = 'bold';
+                    pathTitle.style.marginTop = '10px';
+                    
+                    const pathList = document.createElement('ul');
+                    pathList.style.margin = '5px 0';
+                    pathList.style.paddingLeft = '20px';
+                    
+                    flow.path.forEach(hop => {
+                        const hopItem = document.createElement('li');
+                        hopItem.textContent = `${hop.component_type}: ${hop.name || hop.component_id}${hop.action ? ` (${hop.action.toUpperCase()})` : ''}`;
+                        if (hop.notes) {
+                            const notes = document.createElement('div');
+                            notes.style.fontSize = '12px';
+                            notes.style.color = '#666';
+                            notes.textContent = hop.notes;
+                            hopItem.appendChild(notes);
+                        }
+                        pathList.appendChild(hopItem);
+                    });
+                    
+                    flowElement.appendChild(pathTitle);
+                    flowElement.appendChild(pathList);
+                }
+                
+                container.appendChild(flowElement);
+            });
+        }
+
+        function createNetworkDiagram(data) {
+            const container = document.getElementById('networkDiagram');
+            
+            // Process data format - either already formatted as {nodes, edges} or array of nodes
+            let nodes, edges;
+            
+            if (Array.isArray(data)) {
+                // Original format with just nodes array
+                nodes = new vis.DataSet(data);
+                edges = new vis.DataSet(data.slice(1).map((_, i) => ({ from: i + 1, to: i + 2 })));
+            } else {
+                // New format with nodes and edges
+                nodes = new vis.DataSet(data.nodes);
+                edges = new vis.DataSet(data.edges);
+            }
+            
+            const networkData = { nodes, edges };
+            
+            const options = {
+                layout: {
+                    hierarchical: {
+                        direction: "LR",
+                        sortMethod: "directed",
+                        levelSeparation: 200,
+                        nodeSpacing: 150
+                    }
+                },
+                nodes: {
+                    shape: 'box',
+                    margin: 10,
+                    widthConstraint: {
+                        maximum: 200
+                    },
+                    shadow: true,
+                    font: {
+                        size: 14
+                    }
+                },
+                edges: {
+                    width: 3,
+                    smooth: {
+                        type: 'curvedCW',
+                        roundness: 0.2
+                    },
+                    arrows: {
+                        to: {
+                            enabled: true,
+                            scaleFactor: 1.2
+                        }
+                    },
+                    color: {
+                        inherit: false
+                    },
+                    shadow: true,
+                    font: {
+                        size: 12,
+                        align: 'middle'
+                    }
+                },
+                physics: {
+                    enabled: false  // Disable physics for hierarchical layout
+                },
+                interaction: {
+                    hover: true,
+                    hoverConnectedEdges: true,
+                    selectConnectedEdges: true,
+                    tooltipDelay: 300,
+                    zoomView: true
+                },
+                groups: {
+                    vpc: { 
+                        color: { background: '#e0f7fa', border: '#00acc1' },
+                        borderWidth: 2,
+                        font: { color: '#00838f' }
+                    },
+                    subnet: { 
+                        color: { background: '#e8f5e9', border: '#66bb6a' },
+                        borderWidth: 2,
+                        font: { color: '#2e7d32' }
+                    },
+                    igw: { 
+                        shape: 'diamond',
+                        color: { background: '#fff9c4', border: '#fbc02d' },
+                        borderWidth: 2,
+                        font: { color: '#f57f17' }
+                    },
+                    nat: { 
+                        shape: 'diamond',
+                        color: { background: '#ffecb3', border: '#ffa000' },
+                        borderWidth: 2,
+                        font: { color: '#ff6f00' }
+                    },
+                    endpoint: { 
+                        shape: 'hexagon',
+                        color: { background: '#e1bee7', border: '#8e24aa' },
+                        borderWidth: 2,
+                        font: { color: '#4a148c' }
+                    },
+                    sg: { 
+                        shape: 'dot',
+                        color: { background: '#bbdefb', border: '#1e88e5' },
+                        borderWidth: 2,
+                        font: { color: '#0d47a1' }
+                    },
+                    nacl: { 
+                        shape: 'dot',
+                        color: { background: '#d1c4e9', border: '#7e57c2' },
+                        borderWidth: 2,
+                        font: { color: '#4527a0' }
+                    },
+                    route: { 
+                        shape: 'star',
+                        color: { background: '#b2dfdb', border: '#26a69a' },
+                        borderWidth: 2,
+                        font: { color: '#00695c' }
+                    },
+                    source: {
+                        shape: 'box',
+                        color: { background: '#2196f3', border: '#0d47a1' },
+                        borderWidth: 3,
+                        font: { color: '#ffffff' }
+                    },
+                    destination: {
+                        shape: 'box',
+                        color: { background: '#f44336', border: '#b71c1c' },
+                        borderWidth: 3,
+                        font: { color: '#ffffff' }
+                    },
+                    service: {
+                        shape: 'hexagon',
+                        color: { background: '#673ab7', border: '#311b92' },
+                        borderWidth: 2,
+                        font: { color: '#ffffff' }
+                    }
+                }
+            };
+            
+            // Destroy existing network if it exists
+            if (network) {
+                network.destroy();
+            }
+            
+            // Create the network
+            network = new vis.Network(container, networkData, options);
+            
+            // Add network legend after visualization is created
+            createNetworkLegend();
+            
+            // Show details when a node is selected
+            network.on("click", function (params) {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    const node = nodes.get(nodeId);
+                    
+                    const detailsContainer = document.getElementById('selectedResourceDetails');
+                    
+                    // Format node title into HTML
+                    let htmlContent = '<table style="width:100%; border-collapse: collapse;">';
+                    
+                    if (node.title) {
+                        const lines = node.title.split('\n');
+                        lines.forEach(line => {
+                            if (line.includes(':')) {
+                                const [key, value] = line.split(':', 2);
+                                htmlContent += `<tr><td style="padding:5px; font-weight:bold; border-bottom:1px solid #eee;">${key}</td><td style="padding:5px; border-bottom:1px solid #eee;">${value}</td></tr>`;
+                            } else {
+                                htmlContent += `<tr><td colspan="2" style="padding:5px; border-bottom:1px solid #eee;">${line}</td></tr>`;
+                            }
+                        });
+                    } else {
+                        htmlContent += `<tr><td style="padding:5px;">${node.label}</td></tr>`;
+                    }
+                    
+                    htmlContent += '</table>';
+                    detailsContainer.innerHTML = htmlContent;
+                    
+                    // Highlight connected paths
+                    highlightConnectedPaths(nodeId);
+                }
+            });
+            
+            // Handle double-click for node to center the view
+            network.on("doubleClick", function(params) {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    const position = network.getPositions([nodeId])[nodeId];
+                    network.moveTo({
+                        position: {x: position.x, y: position.y},
+                        scale: 1.2,
+                        animation: {
+                            duration: 1000,
+                            easingFunction: "easeInOutQuad"
+                        }
+                    });
+                }
+            });
+            
+            // After stabilization, fit to the network view
+            network.once("stabilizationIterationsDone", function() {
+                network.fit({
+                    animation: {
+                        duration: 1000,
+                        easingFunction: "easeOutQuint"
+                    }
+                });
+            });
+        }
+        
+        function highlightConnectedPaths(nodeId) {
+            if (!network) return;
+            
+            // Reset all nodes and edges
+            const allNodes = network.body.nodes;
+            const allEdges = network.body.edges;
+            
+            Object.values(allNodes).forEach(node => {
+                node.setOptions({ opacity: 0.3 });
+            });
+            
+            Object.values(allEdges).forEach(edge => {
+                edge.setOptions({ opacity: 0.3, width: 1 });
+            });
+            
+            // Find connected nodes and edges
+            const connectedNodes = network.getConnectedNodes(nodeId);
+            const connectedEdges = network.getConnectedEdges(nodeId);
+            
+            // Highlight the selected node
+            allNodes[nodeId].setOptions({ opacity: 1.0 });
+            
+            // Highlight directly connected nodes and edges
+            connectedNodes.forEach(connectedNode => {
+                allNodes[connectedNode].setOptions({ opacity: 1.0 });
+            });
+            
+            connectedEdges.forEach(connectedEdge => {
+                allEdges[connectedEdge].setOptions({ opacity: 1.0, width: 3 });
+            });
+            
+            network.redraw();
+        }
+        
+        function createNetworkLegend() {
+            // Create a legend div if it doesn't exist yet
+            let legend = document.getElementById('network-legend');
+            if (!legend) {
+                legend = document.createElement('div');
+                legend.id = 'network-legend';
+                legend.style.position = 'absolute';
+                legend.style.top = '10px';
+                legend.style.right = '10px';
+                legend.style.padding = '10px';
+                legend.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+                legend.style.border = '1px solid #ddd';
+                legend.style.borderRadius = '5px';
+                legend.style.fontSize = '12px';
+                legend.style.zIndex = '1000';
+                legend.style.maxWidth = '200px';
+                
+                const networkContainer = document.getElementById('networkDiagram');
+                networkContainer.style.position = 'relative';
+                networkContainer.appendChild(legend);
+            }
+            
+            // Add legend content
+            legend.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 5px;">Legend</div>
+                <div style="display: flex; align-items: center; margin-bottom: 3px;">
+                    <div style="width: 15px; height: 15px; background-color: #e0f7fa; border: 2px solid #00acc1; margin-right: 5px;"></div>
+                    <span>VPC</span>
+                </div>
+                <div style="display: flex; align-items: center; margin-bottom: 3px;">
+                    <div style="width: 15px; height: 15px; background-color: #e8f5e9; border: 2px solid #66bb6a; margin-right: 5px;"></div>
+                    <span>Subnet</span>
+                </div>
+                <div style="display: flex; align-items: center; margin-bottom: 3px;">
+                    <div style="width: 15px; height: 15px; transform: rotate(45deg); background-color: #fff9c4; border: 2px solid #fbc02d; margin-right: 5px;"></div>
+                    <span>Internet Gateway</span>
+                </div>
+                <div style="display: flex; align-items: center; margin-bottom: 3px;">
+                    <div style="width: 15px; height: 15px; transform: rotate(45deg); background-color: #ffecb3; border: 2px solid #ffa000; margin-right: 5px;"></div>
+                    <span>NAT Gateway</span>
+                </div>
+                <div style="display: flex; align-items: center; margin-bottom: 3px;">
+                    <div style="width: 15px; height: 15px; background-color: #e1bee7; border: 2px solid #8e24aa; margin-right: 5px; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);"></div>
+                    <span>VPC Endpoint</span>
+                </div>
+                <div style="display: flex; align-items: center; margin-bottom: 3px;">
+                    <div style="width: 15px; height: 15px; border-radius: 50%; background-color: #bbdefb; border: 2px solid #1e88e5; margin-right: 5px;"></div>
+                    <span>Security Group</span>
+                </div>
+                <div style="display: flex; align-items: center; margin-bottom: 3px;">
+                    <div style="width: 15px; height: 15px; border-radius: 50%; background-color: #d1c4e9; border: 2px solid #7e57c2; margin-right: 5px;"></div>
+                    <span>Network ACL</span>
+                </div>
+                <div style="display: flex; align-items: center; margin-bottom: 3px;">
+                    <div style="width: 15px; height: 15px; background-color: #2196f3; border: 2px solid #0d47a1; margin-right: 5px;"></div>
+                    <span>Traffic Source</span>
+                </div>
+                <div style="display: flex; align-items: center; margin-bottom: 3px;">
+                    <div style="width: 15px; height: 15px; background-color: #f44336; border: 2px solid #b71c1c; margin-right: 5px;"></div>
+                    <span>Traffic Destination</span>
+                </div>
+            `;
+        }
+
+        // Initialize the first resource input set
+        addResource();
+        
+        // Add event handlers for visualization controls
+        document.getElementById('resetViewBtn')?.addEventListener('click', function() {
+            if (network) {
+                network.fit({
+                    animation: {
+                        duration: 1000,
+                        easingFunction: "easeOutQuint"
+                    }
+                });
+            }
+        });
+        
+        document.getElementById('togglePhysicsBtn')?.addEventListener('click', function() {
+            if (network) {
+                const physics = network.physics;
+                const isEnabled = physics.physicsEnabled;
+                
+                if (isEnabled) {
+                    // Disable physics
+                    network.setOptions({ physics: { enabled: false } });
+                    this.textContent = "Enable Physics";
+                } else {
+                    // Enable physics with stabilization
+                    network.setOptions({ 
+                        physics: { 
+                            enabled: true,
+                            stabilization: {
+                                iterations: 100,
+                                fit: true
+                            },
+                            barnesHut: {
+                                gravitationalConstant: -5000,
+                                centralGravity: 0.3,
+                                springLength: 200,
+                                springConstant: 0.05,
+                                damping: 0.1
+                            }
+                        } 
+                    });
+                    this.textContent = "Disable Physics";
+                    
+                    // Re-stabilize the network
+                    network.stabilize(100);
+                }
+            }
+        });
+        
+        document.getElementById('exportDiagramBtn')?.addEventListener('click', function() {
+            if (network) {
+                // Get network canvas
+                const canvas = network.canvas.frame.canvas;
+                
+                // Create an image from the canvas
+                const imgURL = canvas.toDataURL('image/png');
+                
+                // Create temporary link and trigger download
+                const link = document.createElement('a');
+                link.href = imgURL;
+                link.download = 'flowviz-network-diagram.png';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        });
+
+        // Path Analysis Simulator functionality
+        let vpcData = null;
+        
+        // Update path analysis controls when JSON data is loaded
+        function initializePathAnalysisControls(data) {
+            vpcData = data;
+            
+            const sourceSelector = document.getElementById('sourceSelector');
+            const destinationTypeSelector = document.getElementById('destinationType');
+            const destinationSelector = document.getElementById('destinationSelector');
+            const externalDestContainer = document.getElementById('externalDestContainer');
+            
+            // Clear existing options
+            sourceSelector.innerHTML = '<option value="">Select a source</option>';
+            
+            // Add EC2 instances and other potential sources
+            if (data.traffic_flows) {
+                // Create a Set to track unique sources we've already added
+                const addedSources = new Set();
+                
+                data.traffic_flows.forEach(flow => {
+                    if (flow.source && flow.source.id && !addedSources.has(flow.source.id)) {
+                        const option = document.createElement('option');
+                        option.value = flow.source.id;
+                        option.textContent = `${flow.source.type}: ${flow.source.name || flow.source.id}`;
+                        sourceSelector.appendChild(option);
+                        
+                        // Track that we've added this source
+                        addedSources.add(flow.source.id);
+                    }
+                });
+            }
+            
+            // Handle destination type changes
+            destinationTypeSelector.addEventListener('change', function() {
+                const selectedType = this.value;
+                
+                // Clear existing destination options
+                destinationSelector.innerHTML = '<option value="">Select a destination</option>';
+                
+                // Show/hide external destination input
+                externalDestContainer.style.display = selectedType === 'external' ? 'block' : 'none';
+                
+                if (!data) return;
+                
+                switch (selectedType) {
+                    case 'internal':
+                        // Add subnets as destinations
+                        if (data.network_components && data.network_components.subnets) {
+                            data.network_components.subnets.forEach(subnet => {
+                                const option = document.createElement('option');
+                                option.value = subnet.id;
+                                option.textContent = `Subnet: ${subnet.name || subnet.id} (${subnet.cidr_block})`;
+                                destinationSelector.appendChild(option);
+                            });
+                        }
+                        
+                        // Add any EC2 instances that appear as destinations
+                        if (data.traffic_flows) {
+                            const addedDests = new Set();
+                            
+                            data.traffic_flows.forEach(flow => {
+                                if (flow.destination && 
+                                    flow.destination.id && 
+                                    flow.destination.type === 'ec2_instance' && 
+                                    !addedDests.has(flow.destination.id)) {
+                                    
+                                    const option = document.createElement('option');
+                                    option.value = flow.destination.id;
+                                    option.textContent = `EC2: ${flow.destination.name || flow.destination.id}`;
+                                    destinationSelector.appendChild(option);
+                                    
+                                    addedDests.add(flow.destination.id);
+                                }
+                            });
+                        }
+                        break;
+                        
+                    case 'vpc-endpoint':
+                        // Add VPC endpoints as destinations
+                        if (data.network_components && 
+                            data.network_components.gateways && 
+                            data.network_components.gateways.vpc_endpoints) {
+                            
+                            data.network_components.gateways.vpc_endpoints.forEach(endpoint => {
+                                const option = document.createElement('option');
+                                option.value = endpoint.id;
+                                const serviceName = endpoint.service_name.split('.').slice(-2, -1)[0] || endpoint.service_name;
+                                option.textContent = `${serviceName}: ${endpoint.id}`;
+                                destinationSelector.appendChild(option);
+                            });
+                        }
+                        break;
+                        
+                    case 'vpc-peering':
+                        // Find VPC peering connections in route tables
+                        if (data.network_components && data.network_components.route_tables) {
+                            const peeringConnections = new Set();
+                            
+                            data.network_components.route_tables.forEach(rt => {
+                                if (rt.routes) {
+                                    rt.routes.forEach(route => {
+                                        if (route.target_type === 'vpc_peering' && route.target_id) {
+                                            peeringConnections.add(route.target_id);
+                                        }
+                                    });
+                                }
+                            });
+                            
+                            peeringConnections.forEach(peeringId => {
+                                const option = document.createElement('option');
+                                option.value = peeringId;
+                                option.textContent = `VPC Peering: ${peeringId}`;
+                                destinationSelector.appendChild(option);
+                            });
+                        }
+                        break;
+                }
+            });
+            
+            // Add event listener for the Simulate Path button
+            document.getElementById('simulatePathBtn').addEventListener('click', simulatePath);
+        }
+        
+        function simulatePath() {
+            if (!vpcData) {
+                alert('Please load network data first');
+                return;
+            }
+            
+            const sourceId = document.getElementById('sourceSelector').value;
+            const destinationType = document.getElementById('destinationType').value;
+            const destinationValue = destinationType === 'external' ? 
+                document.getElementById('externalDestination').value : 
+                document.getElementById('destinationSelector').value;
+            const port = parseInt(document.getElementById('portSelector').value, 10);
+            const protocol = document.getElementById('protocolSelector').value;
+            
+            if (!sourceId) {
+                alert('Please select a source');
+                return;
+            }
+            
+            if (!destinationValue) {
+                alert('Please select or enter a destination');
+                return;
+            }
+            
+            // This would be where a comprehensive path analysis algorithm would run
+            // For this demo, we'll simulate the analysis with a simplified approach
+            
+            // Find source details
+            let sourceDetails = null;
+            let destDetails = null;
+            
+            // Look for source in traffic flows
+            if (vpcData.traffic_flows) {
+                for (const flow of vpcData.traffic_flows) {
+                    if (flow.source && flow.source.id === sourceId) {
+                        sourceDetails = flow.source;
+                        break;
+                    }
+                }
+            }
+            
+            if (!sourceDetails) {
+                alert('Source details not found');
+                return;
+            }
+            
+            // Create a simulated path
+            const path = [];
+            let allowed = true;
+            let blockReason = '';
+            
+            // Find the subnet for the source
+            let sourceSubnet = null;
+            if (vpcData.network_components && vpcData.network_components.subnets) {
+                for (const subnet of vpcData.network_components.subnets) {
+                    // This is simplified - in a real implementation we would check if the source IP is in the subnet CIDR
+                    if (subnet.id === sourceDetails.subnet_id) {
+                        sourceSubnet = subnet;
+                        break;
+                    }
+                }
+            }
+            
+            if (sourceSubnet) {
+                path.push({
+                    component_type: 'subnet',
+                    component_id: sourceSubnet.id,
+                    name: sourceSubnet.name || sourceSubnet.id,
+                    notes: `Source subnet ${sourceSubnet.cidr_block}`
+                });
+            }
+            
+            // Check security groups for the source
+            if (vpcData.network_components && 
+                vpcData.network_components.security && 
+                vpcData.network_components.security.security_groups) {
+                
+                // Find security groups attached to the source
+                const sourceSecurityGroups = [];
+                if (sourceDetails.security_groups) {
+                    sourceDetails.security_groups.forEach(sgRef => {
+                        const sg = vpcData.network_components.security.security_groups.find(g => g.id === sgRef.GroupId);
+                        if (sg) sourceSecurityGroups.push(sg);
+                    });
+                }
+                
+                // For demo, check the most restrictive security group rule
+                let foundAllowRule = false;
+                
+                for (const sg of sourceSecurityGroups) {
+                    path.push({
+                        component_type: 'security_group',
+                        component_id: sg.id,
+                        name: sg.name || sg.id,
+                        notes: `Checking outbound rules for ${protocol} traffic to port ${port}`
+                    });
+                    
+                    // Check if security group allows this traffic
+                    if (sg.outbound_rules) {
+                        for (const rule of sg.outbound_rules) {
+                            // Check for all traffic rule or specific protocol/port rule
+                            if (rule.protocol === 'all' || rule.protocol === protocol) {
+                                // If rule has port range, check if port is within range
+                                if (rule.protocol !== 'all' && rule.port_range) {
+                                    const [fromPort, toPort] = rule.port_range.split('-').map(p => parseInt(p, 10));
+                                    if (port >= fromPort && port <= toPort) {
+                                        foundAllowRule = true;
+                                        break;
+                                    }
+                                } else {
+                                    // All traffic allowed
+                                    foundAllowRule = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (!foundAllowRule) {
+                        allowed = false;
+                        blockReason = `Security group ${sg.name || sg.id} blocks outbound ${protocol} traffic to port ${port}`;
+                        path[path.length - 1].action = 'deny';
+                        path[path.length - 1].notes = blockReason;
+                        break;
+                    } else {
+                        path[path.length - 1].action = 'allow';
+                    }
+                }
+            }
+            
+            // Check route table for the source subnet
+            if (allowed && sourceSubnet && vpcData.network_components && vpcData.network_components.route_tables) {
+                let subnetRouteTable = null;
+                
+                // Find route table for the source subnet
+                for (const rt of vpcData.network_components.route_tables) {
+                    if (rt.associations) {
+                        for (const assoc of rt.associations) {
+                            if (assoc.subnet_id === sourceSubnet.id) {
+                                subnetRouteTable = rt;
+                                break;
+                            }
+                        }
+                    }
+                    if (subnetRouteTable) break;
+                }
+                
+                if (subnetRouteTable) {
+                    path.push({
+                        component_type: 'route_table',
+                        component_id: subnetRouteTable.id,
+                        name: subnetRouteTable.name || subnetRouteTable.id,
+                        notes: `Route table for subnet ${sourceSubnet.name || sourceSubnet.id}`
+                    });
+                    
+                    // Check if route table has a route for the destination
+                    let hasRoute = false;
+                    let routeTarget = null;
+                    
+                    if (subnetRouteTable.routes) {
+                        if (destinationType === 'external') {
+                            // For external destinations, check if there's a route to 0.0.0.0/0
+                            const defaultRoute = subnetRouteTable.routes.find(r => r.destination === '0.0.0.0/0');
+                            if (defaultRoute) {
+                                hasRoute = true;
+                                routeTarget = {
+                                    type: defaultRoute.target_type,
+                                    id: defaultRoute.target_id
+                                };
+                            }
+                        } else if (destinationType === 'vpc-endpoint') {
+                            // For VPC endpoints, check if there's a specific route or entries in the route table
+                            const endpointRoute = subnetRouteTable.routes.find(r => r.target_id === destinationValue);
+                            if (endpointRoute) {
+                                hasRoute = true;
+                                routeTarget = {
+                                    type: 'vpc_endpoint',
+                                    id: destinationValue
+                                };
+                            }
+                        } else if (destinationType === 'vpc-peering') {
+                            // For VPC peering, check if there's a route with the peering connection as target
+                            const peeringRoute = subnetRouteTable.routes.find(r => r.target_id === destinationValue);
+                            if (peeringRoute) {
+                                hasRoute = true;
+                                routeTarget = {
+                                    type: 'vpc_peering',
+                                    id: destinationValue
+                                };
+                            }
+                        } else {
+                            // For internal destinations, check if there's a route to the destination's CIDR
+                            // For simplicity, assume local route exists
+                            hasRoute = true;
+                            routeTarget = {
+                                type: 'local',
+                                id: 'local'
+                            };
+                        }
+                    }
+                    
+                    if (!hasRoute) {
+                        allowed = false;
+                        blockReason = `No route found to destination in route table ${subnetRouteTable.name || subnetRouteTable.id}`;
+                        path[path.length - 1].action = 'deny';
+                        path[path.length - 1].notes = blockReason;
+                    } else {
+                        path[path.length - 1].action = 'allow';
+                        
+                        // Add next hop based on route target
+                        if (routeTarget && routeTarget.type !== 'local') {
+                            let nextHopComponent = null;
+                            
+                            if (routeTarget.type === 'gateway' && routeTarget.id.startsWith('igw-')) {
+                                // Internet Gateway
+                                const igw = vpcData.network_components.gateways.internet_gateways.find(g => g.id === routeTarget.id);
+                                if (igw) {
+                                    nextHopComponent = {
+                                        component_type: 'internet_gateway',
+                                        component_id: igw.id,
+                                        name: igw.name || igw.id,
+                                        notes: 'Traffic exits VPC through Internet Gateway'
+                                    };
+                                }
+                            } else if (routeTarget.type === 'nat_gateway') {
+                                // NAT Gateway
+                                const nat = vpcData.network_components.gateways.nat_gateways.find(g => g.id === routeTarget.id);
+                                if (nat) {
+                                    nextHopComponent = {
+                                        component_type: 'nat_gateway',
+                                        component_id: nat.id,
+                                        name: nat.name || nat.id,
+                                        notes: `Traffic routed through NAT Gateway in subnet ${nat.subnet_id}`
+                                    };
+                                }
+                            } else if (routeTarget.type === 'vpc_endpoint') {
+                                // VPC Endpoint
+                                const endpoint = vpcData.network_components.gateways.vpc_endpoints.find(e => e.id === routeTarget.id);
+                                if (endpoint) {
+                                    nextHopComponent = {
+                                        component_type: 'vpc_endpoint',
+                                        component_id: endpoint.id,
+                                        name: endpoint.service_name,
+                                        notes: `Traffic to ${endpoint.service_name} via VPC Endpoint`
+                                    };
+                                }
+                            } else if (routeTarget.type === 'vpc_peering') {
+                                // VPC Peering Connection
+                                nextHopComponent = {
+                                    component_type: 'vpc_peering',
+                                    component_id: routeTarget.id,
+                                    name: routeTarget.id,
+                                    notes: `Traffic routed through VPC Peering Connection`
+                                };
+                            }
+                            
+                            if (nextHopComponent) {
+                                path.push(nextHopComponent);
+                            }
+                        }
+                    }
+                } else {
+                    // No route table found
+                    allowed = false;
+                    blockReason = `No route table found for subnet ${sourceSubnet.name || sourceSubnet.id}`;
+                }
+            }
+            
+            // Create destination object
+            if (destinationType === 'external') {
+                destDetails = {
+                    type: 'internet',
+                    id: 'internet',
+                    ip: destinationValue,
+                    port: port
+                };
+            } else if (destinationType === 'vpc-endpoint') {
+                const endpoint = vpcData.network_components.gateways.vpc_endpoints.find(e => e.id === destinationValue);
+                if (endpoint) {
+                    destDetails = {
+                        type: 'aws_service',
+                        id: endpoint.id,
+                        name: endpoint.service_name,
+                        port: port
+                    };
+                }
+            } else if (destinationType === 'vpc-peering') {
+                destDetails = {
+                    type: 'vpc_peering',
+                    id: destinationValue,
+                    port: port
+                };
+            } else {
+                // Internal destination
+                // For simplicity, just use the selected ID
+                destDetails = {
+                    type: destinationValue.startsWith('subnet-') ? 'subnet' : 'ec2_instance',
+                    id: destinationValue,
+                    port: port
+                };
+            }
+            
+            // Generate a simulated flow
+            const simulatedFlow = {
+                id: 'simulated-flow',
+                source: sourceDetails,
+                destination: destDetails,
+                protocol: protocol,
+                port: port,
+                status: allowed ? 'allowed' : 'blocked',
+                path: path
+            };
+            
+            // Display the results
+            displaySimulatedPath(simulatedFlow);
+            
+            // Highlight the path in the visualization
+            highlightSimulatedPath(simulatedFlow);
+        }
+        
+        function displaySimulatedPath(flow) {
+            const resultContainer = document.getElementById('pathAnalysisResult');
+            resultContainer.style.display = 'block';
+            
+            // Create HTML for the flow
+            let html = `
+                <div style="margin-bottom: 10px;">
+                    <h4 style="margin-top: 0; color: ${flow.status === 'allowed' ? '#2e7d32' : '#b71c1c'}">
+                        Path Analysis Result: ${flow.status.toUpperCase()}
+                    </h4>
+                    <div style="font-weight: bold;">
+                        ${flow.source.name || flow.source.id} → ${flow.destination.name || flow.destination.ip || flow.destination.id}:${flow.port} (${flow.protocol})
+                    </div>
+                </div>
+            `;
+            
+            // Add path details
+            if (flow.path && flow.path.length > 0) {
+                html += '<div style="margin-top: 10px;"><strong>Path Analysis:</strong></div>';
+                html += '<ul style="margin-top: 5px;">';
+                
+                flow.path.forEach((hop, index) => {
+                    const actionColor = hop.action === 'deny' ? '#f44336' : hop.action === 'allow' ? '#4caf50' : '#757575';
+                    html += `
+                        <li style="margin-bottom: 8px;">
+                            <div style="font-weight: bold;">
+                                ${index + 1}. ${hop.component_type}: ${hop.name || hop.component_id}
+                                ${hop.action ? 
+                                    `<span style="color: ${actionColor};">(${hop.action.toUpperCase()})</span>` : 
+                                    ''}
+                            </div>
+                            ${hop.notes ? `<div style="font-size: 12px; color: #666;">${hop.notes}</div>` : ''}
+                        </li>
+                    `;
+                });
+                
+                html += '</ul>';
+            }
+            
+            // Add final status message
+            if (flow.status === 'blocked') {
+                const lastHop = flow.path[flow.path.length - 1];
+                html += `
+                    <div style="margin-top: 10px; padding: 8px; background-color: #ffebee; border-left: 4px solid #f44336;">
+                        <strong>Traffic Blocked:</strong> ${lastHop.notes || 'Traffic was blocked due to network controls'}
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div style="margin-top: 10px; padding: 8px; background-color: #e8f5e9; border-left: 4px solid #4caf50;">
+                        <strong>Traffic Allowed:</strong> All network controls permit this traffic flow
+                    </div>
+                `;
+            }
+            
+            resultContainer.innerHTML = html;
+        }
+        
+        function highlightSimulatedPath(flow) {
+            if (!network || !flow.path) return;
+            
+            // Reset all nodes and edges
+            network.unselectAll();
+            
+            const allNodes = network.body.nodes;
+            const allEdges = network.body.edges;
+            
+            Object.values(allNodes).forEach(node => {
+                node.setOptions({ opacity: 0.3 });
+            });
+            
+            Object.values(allEdges).forEach(edge => {
+                edge.setOptions({ opacity: 0.3, width: 1 });
+            });
+            
+            // Get all nodes in the path
+            const nodeIds = [];
+            
+            // Add source
+            if (flow.source && flow.source.id) {
+                nodeIds.push(flow.source.id);
+                if (allNodes[flow.source.id]) {
+                    allNodes[flow.source.id].setOptions({ opacity: 1.0 });
+                }
+            }
+            
+            // Add each hop
+            flow.path.forEach(hop => {
+                if (hop.component_id) {
+                    nodeIds.push(hop.component_id);
+                    if (allNodes[hop.component_id]) {
+                        allNodes[hop.component_id].setOptions({ 
+                            opacity: 1.0,
+                            color: {
+                                border: hop.action === 'deny' ? '#f44336' : 
+                                       hop.action === 'allow' ? '#4caf50' : undefined
+                            }
+                        });
+                    }
+                }
+            });
+            
+            // Add destination
+            if (flow.destination) {
+                const destId = flow.destination.id || flow.destination.ip;
+                if (destId && allNodes[destId]) {
+                    nodeIds.push(destId);
+                    allNodes[destId].setOptions({ opacity: 1.0 });
+                }
+            }
+            
+            // Create temporary edges to visualize the path if they don't exist
+            const tmpEdges = [];
+            
+            for (let i = 0; i < nodeIds.length - 1; i++) {
+                const fromId = nodeIds[i];
+                const toId = nodeIds[i+1];
+                
+                // Check if this edge already exists
+                let existingEdge = null;
+                
+                Object.values(allEdges).forEach(edge => {
+                    if ((edge.from === fromId && edge.to === toId) || 
+                        (edge.from === toId && edge.to === fromId)) {
+                        existingEdge = edge;
+                    }
+                });
+                
+                if (existingEdge) {
+                    // Highlight existing edge
+                    existingEdge.setOptions({ 
+                        opacity: 1.0, 
+                        width: 3,
+                        color: { 
+                            color: flow.status === 'allowed' ? '#4caf50' : 
+                                  flow.status === 'blocked' ? '#f44336' : '#2196f3' 
+                        }
+                    });
+                } else {
+                    // Create temporary edge
+                    const tmpEdge = {
+                        id: `tmp-edge-${i}`,
+                        from: fromId,
+                        to: toId,
+                        arrows: 'to',
+                        dashes: true,
+                        width: 2,
+                        color: { 
+                            color: flow.status === 'allowed' ? '#4caf50' : 
+                                  flow.status === 'blocked' ? '#f44336' : '#2196f3' 
+                        }
+                    };
+                    
+                    tmpEdges.push(tmpEdge);
+                }
+            }
+            
+            // Add temporary edges if needed
+            if (tmpEdges.length > 0) {
+                network.body.data.edges.add(tmpEdges);
+                
+                // Remove temporary edges after a delay
+                setTimeout(() => {
+                    network.body.data.edges.remove(tmpEdges.map(e => e.id));
+                }, 10000); // Remove after 10 seconds
+            }
+            
+            network.redraw();
+            
+            // Focus on the path
+            if (nodeIds.length > 0) {
+                network.focus(nodeIds[0], {
+                    scale: 1.0,
+                    animation: {
+                        duration: 1000,
+                        easingFunction: "easeInOutQuad"
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+</html> 

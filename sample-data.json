@@ -1,0 +1,273 @@
+{
+  "metadata": {
+    "instance_id": "i-0123456789abcdef0",
+    "instance_name": "Test-EC2-Instance",
+    "vpc_id": "vpc-0123456789abcdef0",
+    "region": "us-east-1",
+    "analysis_timestamp": "2024-05-16T10:30:00.000Z",
+    "version": "1.0"
+  },
+  "network_components": {
+    "vpc": {
+      "id": "vpc-0123456789abcdef0",
+      "name": "Main VPC",
+      "cidr_block": "10.0.0.0/16"
+    },
+    "subnets": [
+      {
+        "id": "subnet-0123456789abcdef1",
+        "name": "Public Subnet A",
+        "cidr_block": "10.0.1.0/24",
+        "availability_zone": "us-east-1a",
+        "public": true
+      },
+      {
+        "id": "subnet-0123456789abcdef2",
+        "name": "Private Subnet A",
+        "cidr_block": "10.0.2.0/24",
+        "availability_zone": "us-east-1a",
+        "public": false
+      }
+    ],
+    "route_tables": [
+      {
+        "id": "rtb-0123456789abcdef1",
+        "name": "Public Route Table",
+        "associations": [
+          {
+            "subnet_id": "subnet-0123456789abcdef1",
+            "main": false
+          }
+        ],
+        "routes": [
+          {
+            "destination": "10.0.0.0/16",
+            "target_type": "local",
+            "target_id": "local"
+          },
+          {
+            "destination": "0.0.0.0/0",
+            "target_type": "gateway",
+            "target_id": "igw-0123456789abcdef0"
+          }
+        ]
+      },
+      {
+        "id": "rtb-0123456789abcdef2",
+        "name": "Private Route Table",
+        "associations": [
+          {
+            "subnet_id": "subnet-0123456789abcdef2",
+            "main": false
+          }
+        ],
+        "routes": [
+          {
+            "destination": "10.0.0.0/16",
+            "target_type": "local",
+            "target_id": "local"
+          },
+          {
+            "destination": "0.0.0.0/0",
+            "target_type": "nat_gateway",
+            "target_id": "nat-0123456789abcdef0"
+          }
+        ]
+      }
+    ],
+    "gateways": {
+      "internet_gateways": [
+        {
+          "id": "igw-0123456789abcdef0",
+          "name": "Main IGW"
+        }
+      ],
+      "nat_gateways": [
+        {
+          "id": "nat-0123456789abcdef0",
+          "name": "NAT Gateway",
+          "subnet_id": "subnet-0123456789abcdef1",
+          "state": "available",
+          "addresses": [
+            {
+              "private_ip": "10.0.1.100",
+              "public_ip": "52.0.0.1"
+            }
+          ]
+        }
+      ],
+      "vpc_endpoints": [
+        {
+          "id": "vpce-0123456789abcdef0",
+          "type": "Interface",
+          "service_name": "com.amazonaws.us-east-1.s3",
+          "state": "available",
+          "subnet_ids": ["subnet-0123456789abcdef2"],
+          "security_group_ids": ["sg-0123456789abcdef0"],
+          "network_interface_ids": ["eni-0123456789abcdef0"]
+        }
+      ]
+    },
+    "security": {
+      "security_groups": [
+        {
+          "id": "sg-0123456789abcdef0",
+          "name": "Web-Server-SG",
+          "description": "Allow HTTPS/SSH traffic",
+          "inbound_rules": [
+            {
+              "protocol": "TCP",
+              "port_range": "443-443",
+              "sources": ["0.0.0.0/0"]
+            },
+            {
+              "protocol": "TCP",
+              "port_range": "22-22",
+              "sources": ["10.0.0.0/16"]
+            }
+          ],
+          "outbound_rules": [
+            {
+              "protocol": "all",
+              "port_range": "all",
+              "destinations": ["0.0.0.0/0"]
+            }
+          ]
+        }
+      ],
+      "network_acls": [
+        {
+          "id": "acl-0123456789abcdef0",
+          "name": "Default NACL",
+          "is_default": true,
+          "associations": [
+            {
+              "subnet_id": "subnet-0123456789abcdef1"
+            },
+            {
+              "subnet_id": "subnet-0123456789abcdef2"
+            }
+          ],
+          "inbound_rules": [
+            {
+              "rule_number": 100,
+              "protocol": "TCP",
+              "port_range": "443-443",
+              "cidr": "0.0.0.0/0",
+              "action": "allow"
+            },
+            {
+              "rule_number": 110,
+              "protocol": "TCP",
+              "port_range": "22-22",
+              "cidr": "10.0.0.0/16",
+              "action": "allow"
+            },
+            {
+              "rule_number": 32767,
+              "protocol": "all",
+              "port_range": "all",
+              "cidr": "0.0.0.0/0",
+              "action": "deny"
+            }
+          ],
+          "outbound_rules": [
+            {
+              "rule_number": 100,
+              "protocol": "all",
+              "port_range": "all",
+              "cidr": "0.0.0.0/0",
+              "action": "allow"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "traffic_flows": [
+    {
+      "id": "flow-1",
+      "source": {
+        "type": "ec2_instance",
+        "id": "i-0123456789abcdef0",
+        "name": "Web Server",
+        "ip": "10.0.1.50",
+        "port": 443
+      },
+      "destination": {
+        "type": "internet",
+        "ip": "8.8.8.8",
+        "port": 53,
+        "hostname": "dns.google"
+      },
+      "protocol": "UDP",
+      "port": 53,
+      "state": "ESTABLISHED",
+      "process": "systemd-resolved",
+      "status": "allowed",
+      "path": [
+        {
+          "component_type": "subnet",
+          "component_id": "subnet-0123456789abcdef1",
+          "name": "Public Subnet A",
+          "notes": "Private subnet 10.0.1.0/24"
+        },
+        {
+          "component_type": "security_group",
+          "component_id": "sg-0123456789abcdef0",
+          "name": "Web-Server-SG",
+          "action": "allow",
+          "notes": "Security group allows outbound UDP traffic to 8.8.8.8:53"
+        },
+        {
+          "component_type": "network_acl",
+          "component_id": "acl-0123456789abcdef0",
+          "name": "Default NACL",
+          "action": "allow",
+          "notes": "Network ACL allows outbound UDP traffic from port 443 to 8.8.8.8"
+        },
+        {
+          "component_type": "internet_gateway",
+          "component_id": "igw-0123456789abcdef0",
+          "name": "Main IGW",
+          "notes": "Route to 0.0.0.0/0 via Internet Gateway"
+        }
+      ]
+    },
+    {
+      "id": "flow-2",
+      "source": {
+        "type": "ec2_instance",
+        "id": "i-0123456789abcdef0",
+        "name": "Web Server",
+        "ip": "10.0.1.50",
+        "port": 443
+      },
+      "destination": {
+        "type": "aws_service",
+        "ip": "10.0.2.10",
+        "port": 443,
+        "hostname": "s3.amazonaws.com"
+      },
+      "protocol": "TCP",
+      "port": 443,
+      "state": "ESTABLISHED",
+      "process": "aws-cli",
+      "status": "allowed",
+      "path": [
+        {
+          "component_type": "subnet",
+          "component_id": "subnet-0123456789abcdef1",
+          "name": "Public Subnet A",
+          "notes": "Private subnet 10.0.1.0/24"
+        },
+        {
+          "component_type": "vpc_endpoint",
+          "component_id": "vpce-0123456789abcdef0",
+          "name": "com.amazonaws.us-east-1.s3",
+          "notes": "Route to S3 endpoint via VPC Endpoint"
+        }
+      ]
+    }
+  ]
+} 

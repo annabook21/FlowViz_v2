@@ -1,0 +1,292 @@
+/* Windows Classic Theme - Enhanced for FlowViz Desktop */
+body {
+  background-color: #008080; /* Classic Windows teal */
+  font-family: "MS Sans Serif", Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+  color: #000000;
+  font-size: 12px;
+}
+
+.window {
+  background-color: #c0c0c0; /* Classic Windows gray */
+  border-top: 2px solid #dfdfdf;
+  border-left: 2px solid #dfdfdf;
+  border-right: 2px solid #808080;
+  border-bottom: 2px solid #808080;
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+  padding: 2px;
+  margin: 20px auto;
+  max-width: 1200px;
+}
+
+.title-bar {
+  background-color: #000080; /* Windows classic blue */
+  color: white;
+  padding: 3px 5px;
+  margin: 0;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  border-radius: 0;
+}
+
+.title-bar-text {
+  flex: 1;
+  font-size: 14px;
+}
+
+/* Tab styling */
+.tabs {
+  display: flex;
+  margin: 10px 0 0 0;
+  border-bottom: 2px solid #808080;
+}
+
+.tab {
+  padding: 5px 15px;
+  background-color: #c0c0c0;
+  cursor: pointer;
+  margin-right: 2px;
+  border-top: 2px solid #dfdfdf;
+  border-left: 2px solid #dfdfdf;
+  border-right: 2px solid #808080;
+  border-bottom: none;
+  position: relative;
+  top: 2px;
+}
+
+.tab:hover {
+  background-color: #d0d0d0;
+}
+
+.tab.active {
+  background-color: #c0c0c0;
+  border-bottom: 2px solid #c0c0c0;
+  z-index: 1;
+}
+
+.tab-content {
+  display: none;
+  padding: 15px;
+  border: 2px inset #fff;
+  background-color: #c0c0c0;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Form elements */
+.form-group {
+  margin-bottom: 12px;
+}
+
+.resource-group {
+  padding: 10px;
+  margin-bottom: 15px;
+  border: 2px inset #fff;
+  background-color: #c0c0c0;
+}
+
+label {
+  display: block;
+  margin-bottom: 3px;
+  font-weight: bold;
+}
+
+.input-control, select, input[type="text"] {
+  width: 100%;
+  padding: 3px 5px;
+  background-color: #ffffff;
+  border: 2px inset #bdbdbd;
+  margin-bottom: 5px;
+  box-sizing: border-box;
+  font-family: "MS Sans Serif", Arial, sans-serif;
+}
+
+.vpc-details, .outside-vpc-details {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid #808080;
+  background-color: #d4d0c8;
+}
+
+/* Buttons */
+.btn {
+  background-color: #c0c0c0;
+  color: #000;
+  border-top: 2px solid #dfdfdf;
+  border-left: 2px solid #dfdfdf;
+  border-right: 2px solid #808080;
+  border-bottom: 2px solid #808080;
+  padding: 4px 10px;
+  margin: 5px 5px 5px 0;
+  cursor: pointer;
+  min-width: 80px;
+  font-family: "MS Sans Serif", Arial, sans-serif;
+  font-size: 12px;
+  outline: 1px solid #000;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn:hover {
+  background-color: #d4d0c8;
+}
+
+.btn:active {
+  border-top: 2px solid #808080;
+  border-left: 2px solid #808080;
+  border-right: 2px solid #dfdfdf;
+  border-bottom: 2px solid #dfdfdf;
+  outline: 1px solid #000;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  display: inline-block;
+}
+
+.icon.floppy {
+  background: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABGdBTUEAALGPC/xhBQAAAAlwSFlzAAAOwgAADsIBFShKgAAAABl0RVh0U29mdHdhcmUAcGFpbnQubmV0IDQuMC4xMzQDW3oAAABgSURBVDhPY2AY3oCRiTGGEV0OmzpkNgODEjDuUxh+yIzMRjcEJociBm0YLsiMAUiOgYkBLg6ik/kQOQYlNAFkNrodaC4A6oW7AKQQi0vgYiB5uAuQXYAsBzIb3TUMKJQDAM1W5A3jvjCDAAAAAElFTkSuQmCC') no-repeat center center;
+}
+
+/* Network Diagram */
+#networkDiagram {
+  width: 100%;
+  height: 600px;
+  border: 2px inset #bdbdbd;
+  margin-top: 10px;
+  background-color: #f0f0f0;
+}
+
+/* JSON Preview */
+#jsonPreview {
+  width: 100%;
+  height: 300px;
+  border: 2px inset #bdbdbd;
+  padding: 5px;
+  overflow: auto;
+  font-family: Consolas, "Courier New", monospace;
+  background-color: #ffffff;
+  white-space: pre;
+  font-size: 12px;
+}
+
+/* Resource and Traffic details */
+.resource-details, .traffic-flow {
+  margin-top: 10px;
+  padding: 10px;
+  border: 2px inset #bdbdbd;
+  background-color: #d4d0c8;
+}
+
+#selectedResourceDetails {
+  padding: 8px;
+  min-height: 50px;
+  background-color: #ffffff;
+  border: 2px inset #bdbdbd;
+}
+
+/* Traffic flow statuses */
+.status-allowed {
+  background-color: #c6efc6; /* Light green */
+  border: 1px solid #008000;
+}
+
+.status-blocked {
+  background-color: #f5c6c6; /* Light red */
+  border: 1px solid #800000;
+}
+
+.status-unknown {
+  background-color: #fffacd; /* Light yellow */
+  border: 1px solid #808000;
+}
+
+/* Creator info */
+.creator-info {
+  max-width: 600px;
+  margin: 30px auto;
+  border-top: 2px solid #dfdfdf;
+  border-left: 2px solid #dfdfdf;
+  border-right: 2px solid #808080;
+  border-bottom: 2px solid #808080;
+  padding: 15px;
+  background-color: #c0c0c0;
+  box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.creator-info p {
+  margin: 5px 0;
+}
+
+.creator-info a {
+  color: #000080;
+  text-decoration: none;
+}
+
+.creator-info a:hover {
+  text-decoration: underline;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: #c0c0c0;
+  border: 1px solid #808080;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #c0c0c0;
+  border-top: 2px solid #dfdfdf;
+  border-left: 2px solid #dfdfdf;
+  border-right: 2px solid #808080;
+  border-bottom: 2px solid #808080;
+}
+
+::-webkit-scrollbar-button {
+  background-color: #c0c0c0;
+  border-top: 2px solid #dfdfdf;
+  border-left: 2px solid #dfdfdf;
+  border-right: 2px solid #808080;
+  border-bottom: 2px solid #808080;
+  height: 16px;
+  width: 16px;
+}
+
+/* File information */
+#fileInfo {
+  padding: 5px;
+  background-color: #d4d0c8;
+  border: 1px solid #808080;
+}
+
+/* Tables in resource details */
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+table td {
+  padding: 3px 5px;
+  border-bottom: 1px solid #d4d0c8;
+}
+
+/* Traffic flow visualization */
+#trafficFlows {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 2px inset #bdbdbd;
+  background-color: #ffffff;
+  padding: 5px;
+} 
